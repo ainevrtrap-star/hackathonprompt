@@ -113,7 +113,7 @@ class PromptGenerator(Resource):
             # build model
             tokenizer = GPT2Tokenizer.from_pretrained('distilgpt2')
             tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-            model = GPT2LMHeadModel.from_pretrained('FredZhang7/distilgpt2-stable-diffusion-v2')
+            model = GPT2LMHeadModel.from_pretrained('distilgpt2')
         except Exception as e:
             logging.error(
                 "Exception encountered while attempting to install tokenizer: %s", e)
