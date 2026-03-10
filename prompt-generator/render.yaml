@@ -3,7 +3,13 @@ services:
     name: prompt-generator
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app --workers 4 --threads 2 --timeout 120 --access-logfile -
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: PYTHONUNBUFFERED
+        value: true
+      - key: FLASK_ENV
+        value: production
+    healthCheckPath: /health
+    autoDeploy: true
