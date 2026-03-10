@@ -327,6 +327,23 @@
             font-size: 1rem;
             line-height: 1.5;
         }
+        
+        .api-status {
+            font-size: 0.9rem;
+            padding: 5px 10px;
+            border-radius: 20px;
+            background: #222;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        .api-status.connected {
+            color: #4caf50;
+            border-left: 3px solid #4caf50;
+        }
+        .api-status.disconnected {
+            color: #ff6b6b;
+            border-left: 3px solid #ff6b6b;
+        }
     </style>
 </head>
 <body>
@@ -338,7 +355,7 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link" href="everythingai.html">Generate AI Image</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#">Generate AI Image</a></li>
                     <li class="nav-item"><a class="nav-link" href="car.html">Create your Dream Car</a></li>
                 </ul>
             </div>
@@ -353,6 +370,19 @@
     </section>
 
     <div class="main-container">
+        <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <div id="apiStatus" class="api-status disconnected">🔴 Backend: Disconnected</div>
+            <div>
+                <span style="color: #888;">API Base: </span>
+                <select id="apiBaseSelect" style="width: auto; display: inline-block; padding: 5px 10px; background: #222; color: #fff; border: 1px solid #333; border-radius: 8px;">
+                    <option value="http://localhost:3000">Local (http://localhost:3000)</option>
+                    <option value="https://your-backend.onrender.com">Render (your-backend.onrender.com)</option>
+                    <option value="https://your-api.vercel.app">Vercel (your-api.vercel.app)</option>
+                </select>
+                <button class="test-button" style="padding: 5px 15px; font-size: 0.9rem;" onclick="testBackendConnection()">Test Connection</button>
+            </div>
+        </div>
+
         <div class="step-card" style="margin-bottom: 25px;">
             <div class="step-title"><span>1️⃣</span> Describe what you want to generate</div>
             <textarea id="userPrompt" rows="3" style="width:100%; background:#222; border:2px solid #333; color:#fff; border-radius:12px; padding:12px;" placeholder="Example: A majestic dragon flying over a medieval castle at sunset, digital art, highly detailed">A majestic dragon flying over a medieval castle at sunset, digital art, highly detailed</textarea>
@@ -368,12 +398,9 @@
                 </select>
             </div>
             <div style="display:flex; gap:12px; flex-wrap:wrap; margin:15px 0;">
-                
-                <button class="test-button" style="background:#d50000; width:100%;" onclick="generateImage()">🚀 Generate Image</button>
+                <button class="test-button" style="background:#d50000; width:100%;" onclick="generateImage()" id="generateBtn">🚀 Generate Image</button>
             </div>
         </div>
-
-        
 
         <div class="step-card">
             <div class="step-title">2️⃣ AI Horde <span class="tab-indicator">opens new tab</span></div>
@@ -399,10 +426,58 @@
     <a href="#" class="back-to-top" id="backToTop"><i class="fas fa-arrow-up"></i></a>
 
     <script>
-        // Add Mistral API key
-        const MISTRAL_API_KEY = '4jRtilJ89nbeslcv381UB9kAoAdoX4pN';
         let generatedTitle = 'Your Prompt';
         let generatedDescription = '';
+        
+
+        function getApiBaseUrl() {
+            return document.getElementById('apiBaseSelect').value;
+        }
+
+
+        async function testBackendConnection() {
+            const apiBase = getApiBaseUrl();
+            const statusEl = document.getElementById('apiStatus');
+            const generateBtn = document.getElementById('generateBtn');
+            
+            statusEl.innerHTML = '⏳ Testing connection...';
+            statusEl.className = 'api-status';
+            
+            try {
+                const response = await fetch(`${apiBase}/api/health`, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                    mode: 'cors'
+                });
+                
+                if (response.ok) {
+                    statusEl.innerHTML = '🟢 Backend: Connected';
+                    statusEl.className = 'api-status connected';
+                    generateBtn.disabled = false;
+                    log('✅ Backend connected successfully', 'success');
+                } else {
+                    throw new Error('Connection failed');
+                }
+            } catch (error) {
+                statusEl.innerHTML = '🔴 Backend: Disconnected';
+                statusEl.className = 'api-status disconnected';
+                generateBtn.disabled = true;
+                log('❌ Cannot connect to backend. Make sure your server is running.', 'error');
+                console.error('Connection error:', error);
+            }
+        }
+
+        function sanitizeInput(input) {
+            if (!input) return '';
+            return input
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#x27;')
+                .replace(/\//g, '&#x2F;')
+                .substring(0, 1000);
+        }
 
         function log(message, type = 'info') {
             const results = document.getElementById('testResults');
@@ -421,71 +496,84 @@
         async function generateImage() {
             const userPrompt = document.getElementById('userPrompt').value;
             const style = document.getElementById('styleSelect').value;
+            const apiBase = getApiBaseUrl();
+            const generateBtn = document.getElementById('generateBtn');
             
             if (!userPrompt.trim()) {
                 alert('Please enter a prompt first.');
                 return;
             }
             
+            const sanitizedPrompt = sanitizeInput(userPrompt);
+            const sanitizedStyle = sanitizeInput(style);
             
             document.getElementById('hordeResult').innerHTML = '🎨 Generating title with Mistral AI...';
-            
+            generateBtn.disabled = true;
             
             try {
-                const titleResponse = await fetch('https://api.mistral.ai/v1/chat/completions', {
+                const titleResponse = await fetch(`${apiBase}/api/generate-title`, {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${MISTRAL_API_KEY}`,
+                    headers: { 
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        model: "mistral-small-latest",
-                        messages: [
-                            {
-                                role: 'user',
-                                content: `Create a creative, catchy title (max 5 words) and a one-sentence description for this image concept: "${userPrompt}". 
-                                Return ONLY a JSON object with this exact structure: 
-                                {"title": "creative title here", "description": "brief description here"}`
-                            }
-                        ],
-                        temperature: 0.7,
-                        max_tokens: 100
+                    body: JSON.stringify({ 
+                        prompt: sanitizedPrompt
                     })
                 });
                 
                 if (titleResponse.ok) {
                     const data = await titleResponse.json();
-                    const content = data.choices[0].message.content;
-                    const jsonMatch = content.match(/\{[\s\S]*\}/);
                     
-                    if (jsonMatch) {
-                        const titleData = JSON.parse(jsonMatch[0]);
-                        generatedTitle = titleData.title || 'AI Generated Image';
-                        generatedDescription = titleData.description || '';
-                        log(`✨ Mistral created title: "${generatedTitle}"`, 'success');
+                    if (data.choices && data.choices[0]) {
+                        const content = data.choices[0].message.content;
+                        const jsonMatch = content.match(/\{[\s\S]*\}/);
+                        
+                        if (jsonMatch) {
+                            try {
+                                const titleData = JSON.parse(jsonMatch[0]);
+                                generatedTitle = titleData.title || 'AI Generated Image';
+                                generatedDescription = titleData.description || '';
+                            } catch (e) {
+                                generatedTitle = 'AI Generated Image';
+                                generatedDescription = '';
+                            }
+                        }
+                    } else if (data.title) {
+                        generatedTitle = data.title;
+                        generatedDescription = data.description || '';
                     }
+                    
+                    log(`✨ Title generated: "${generatedTitle}"`, 'success');
+                } else {
+                    throw new Error('Title generation failed');
                 }
             } catch (error) {
-                console.log('Title generation failed, using default');
+                console.log('Title generation failed, using default:', error);
                 generatedTitle = 'AI Generated Image';
+                generatedDescription = '';
+                log('⚠️ Using default title (backend title generation failed)', 'error');
             }
             
+            const finalPrompt = `${sanitizedPrompt}, ${sanitizedStyle}`;
             
-            const finalPrompt = `${userPrompt}, ${style}`;
-            
-            openAITab(finalPrompt, generatedTitle, generatedDescription);
+
+            openGenerationTab(finalPrompt, generatedTitle, generatedDescription);
             document.getElementById('hordeResult').innerHTML = `✅ New tab opened: "${generatedTitle}"`;
-            log(`🎨 Opened AI Horde tab with title: "${generatedTitle}"`, 'success');
+            log(`🎨 Opened generation tab with title: "${generatedTitle}"`, 'success');
+            
+            generateBtn.disabled = false;
         }
 
-        function openAITab(finalPrompt, title, description) {
-            const hordeKey = 'VJy9ra3n-fOQn1XlVct5kQ';
+        function openGenerationTab(finalPrompt, title, description) {
+            const safeTitle = sanitizeInput(title);
+            const safeDescription = sanitizeInput(description);
+            const safePrompt = sanitizeInput(finalPrompt);
             
             const htmlContent = `<!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
-        <title>AI Horde · ${title}</title>
+        <title>AI Horde · ${safeTitle}</title>
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
@@ -613,14 +701,14 @@
     <div class="container">
         <div class="image-showcase">
             <div class="image-gallery" id="imageGallery">
-                <img id="mainImage" src="https://source.unsplash.com/800x600/?${encodeURIComponent(title.split(' ').slice(0,3).join(','))}&${Date.now()}" alt="${title}">
+                <img id="mainImage" src="https://source.unsplash.com/800x600/?${encodeURIComponent(safeTitle.split(' ').slice(0,3).join(','))}&${Date.now()}" alt="${safeTitle}">
             </div>
             <div class="image-info">
-                <h1 class="image-title">${title}</h1>
-                ${description ? `<p class="image-description">${description}</p>` : ''}
+                <h1 class="image-title">${safeTitle}</h1>
+                ${safeDescription ? `<p class="image-description">${safeDescription}</p>` : ''}
                 <div class="prompt-box">
                     <div class="prompt-label">Original prompt</div>
-                    <div class="prompt-text">${finalPrompt}</div>
+                    <div class="prompt-text">${safePrompt}</div>
                 </div>
             </div>
         </div>
@@ -633,8 +721,8 @@
     </div>
 
     <script>
-    const HORDE_KEY = "${hordeKey}";
-    const FINAL_PROMPT = "${finalPrompt.replace(/"/g, '\\"')}";
+    const API_BASE = "${getApiBaseUrl()}";
+    const FINAL_PROMPT = "${safePrompt.replace(/"/g, '\\"')}";
 
     (async function autoGen() {
         const s = document.getElementById('status');
@@ -643,18 +731,16 @@
         const mainImage = document.getElementById('mainImage');
         
         try {
-            const r = await fetch('https://aihorde.net/api/v2/generate/async', {
+            // Call our backend to start image generation
+            const r = await fetch(API_BASE + '/api/generate-image', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'apikey': HORDE_KEY },
-                body: JSON.stringify({
-                    prompt: FINAL_PROMPT,
-                    params: { n: 1, width: 704, height: 512, steps: 25, cfg_scale: 7 },
-                    models: ["stable_diffusion"]
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: FINAL_PROMPT })
             });
+            
             if (!r.ok) {
                 const errorText = await r.text();
-                console.error('AI Horde error:', errorText);
+                console.error('Generation error:', errorText);
                 if (r.status === 429) {
                     throw new Error('Rate limit reached. Please wait a moment.');
                 } else if (r.status === 400) {
@@ -667,9 +753,12 @@
             const id = d.id;
             s.innerHTML = 'Job ' + id + ' waiting in queue...';
             let attempts = 0;
+            
+            // Poll for status using our backend
             const poll = setInterval(async () => {
-                const stat = await fetch('https://aihorde.net/api/v2/generate/status/' + id);
+                const stat = await fetch(API_BASE + '/api/image-status/' + id);
                 const st = await stat.json();
+                
                 if (st.done && st.generations && st.generations[0]) {
                     clearInterval(poll);
                     const imgUrl = st.generations[0].img;
@@ -694,13 +783,16 @@
     <\/script>
     </body>
     </html>`;
+            
             const newTab = window.open();
             newTab.document.write(htmlContent);
             newTab.document.close();
         }
 
+        
         window.onload = function() {
-            log('Ready to generate images with Mistral AI titles!', 'info');
+            testBackendConnection();
+            log('Ready to generate images!', 'info');
         };
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js"></script>
