@@ -1,0 +1,6 @@
+flask
+flask-restful
+flask-limiter
+transformers
+torch
+gpt2

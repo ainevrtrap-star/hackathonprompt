@@ -428,7 +428,7 @@
 
         <div class="step-card" style="margin-bottom: 25px;">
             <div class="step-title"><span>1️⃣</span> Your Dream Car</div>
-            <textarea id="userPrompt" rows="3" style="width:100%; background:#222; border:2px solid #333; color:#fff; border-radius:12px; padding:12px;">I want a orange sports car with V12 engine, scissor doors, extreme speed. Budget $500,000.</textarea>
+            <textarea id="userPrompt" rows="3" style="width:100%; background:#222; border:2px solid #333; color:#fff; border-radius:12px; padding:12px;" placeholder="I want a orange sports car with V12 engine, extreme speed. Budget $500,000."></textarea>
             <div style="display:flex; gap:12px; flex-wrap:wrap; margin:15px 0;">
                 <button class="test-button" style="background:#d50000; width:100%;" onclick="runFullWorkflow()" id="generateBtn">🚀 Generate</button>
             </div>
@@ -492,18 +492,14 @@
         let mainCar = null;
         let generatedImages = {};
 
-        // Auto-detect environment (localhost vs Render)
+        // Get the API base URL from select or default to localhost
         function getApiBaseUrl() {
-            // Check if we're running on localhost
-            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                return 'http://localhost:3000'; // Use local backend
-            }
-            // On Render, use empty string for relative URLs (same domain)
-            return '';
+            return document.getElementById('apiBaseSelect').value;
         }
 
+        // Test backend connection
         async function testBackendConnection() {
-            const apiBase = getApiBaseUrl(); // This will be '' on Render, 'http://localhost:3000' locally
+            const apiBase = getApiBaseUrl();
             const statusEl = document.getElementById('apiStatus');
             const generateBtn = document.getElementById('generateBtn');
             
@@ -511,11 +507,11 @@
             statusEl.className = 'api-status';
             
             try {
-                // Use the detected base URL
+                // Try to connect to the health endpoint
                 const response = await fetch(`${apiBase}/api/health`, {
                     method: 'GET',
-                    headers: { 'Content-Type': 'application/json' }
-                    // Remove 'mode: cors' - not needed for same-origin requests on Render
+                    headers: { 'Content-Type': 'application/json' },
+                    mode: 'cors'
                 });
                 
                 if (response.ok) {
@@ -531,6 +527,7 @@
                 statusEl.className = 'api-status disconnected';
                 generateBtn.disabled = true;
                 log('❌ Cannot connect to backend. Make sure your server is running.', 'error');
+                console.error('Connection error:', error);
             }
         }
 
@@ -974,10 +971,7 @@
         </div>
 
         <script>
-        // Auto-detect environment (localhost vs Render)
-        const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-            ? 'http://localhost:3000' 
-            : '';
+        const API_BASE = "${apiBase}";
         const USER_PROMPT = "${sanitizedUserPrompt.replace(/"/g, '\\"')}";
         const CARS = ${JSON.stringify(carsData)};
         const INITIAL_INDEX = ${currentIndex};

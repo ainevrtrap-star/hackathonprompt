@@ -172,6 +172,63 @@ app.get('/api/image-status/:id', async (req, res) => {
     }
 });
 
+// Call Prompt Generator API to enhance prompts
+app.post('/api/enhance-prompt', async (req, res) => {
+    try {
+        const { prompt } = req.body;
+        
+        if (!prompt) {
+            return res.status(400).json({ error: 'Prompt is required' });
+        }
+
+        console.log('Enhancing prompt:', prompt);
+
+        // Call the Python Prompt Generator service
+        // If running locally on same machine
+        const promptGeneratorUrl = process.env.PROMPT_GENERATOR_URL || 'http://localhost:5000/generate';
+        
+        const response = await fetch(promptGeneratorUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                prompt: prompt,
+                temperature: 0.9,
+                top_k: 8,
+                max_length: 80,
+                num_return_sequences: 3
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Prompt Generator API error:', errorText);
+            // Fallback to original prompt if generator fails
+            return res.json({ 
+                enhancedPrompts: [prompt],
+                original: prompt 
+            });
+        }
+
+        const data = await response.json();
+        
+        // The prompt generator returns an array of enhanced prompts
+        res.json({ 
+            enhancedPrompts: data,
+            original: prompt 
+        });
+        
+    } catch (error) {
+        console.error('Error in enhance-prompt:', error);
+        // Fallback to original prompt
+        res.json({ 
+            enhancedPrompts: [prompt],
+            original: prompt 
+        });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`🚀 Backend server running on http://localhost:${PORT}`);
