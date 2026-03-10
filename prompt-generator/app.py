@@ -10,6 +10,7 @@ from flask import Flask
 from flask_restful import Resource, Api, reqparse, abort
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_cors import CORS  # Add this import
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
 # default config
@@ -43,7 +44,8 @@ default_args = {
 }
 
 app = Flask("PromptGeneratorAPI")
-api = Api(app)
+CORS(app)  # Enable CORS for all routes
+api = Api(app)  # This line stays exactly as is
 
 parser = reqparse.RequestParser()
 parser.add_argument('prompt', required=True)
@@ -58,6 +60,11 @@ limiter = Limiter(
     app=app,
     default_limits=["20 per minute"]
 )
+
+# Add health check endpoint
+@app.route('/health', methods=['GET'])
+def health_check():
+    return {'status': 'healthy', 'service': 'prompt-generator'}, 200
 
 class PromptGenerator(Resource):
     """Prompt Generator Class
@@ -94,7 +101,7 @@ class PromptGenerator(Resource):
             return blacklist
         with open(blacklist_filename, 'r') as f:
             for line in f:
-                blacklist.append(line)
+                blacklist.append(line.strip())  # Added .strip() to remove newlines
 
             return blacklist
 
@@ -110,17 +117,19 @@ class PromptGenerator(Resource):
         prompt = args['prompt']
         request_uuid = uuid.uuid4()
         try:
-            # build model
+            # build model - load once at startup instead of per request?
+            # For now, keep as is but consider moving to global scope
             tokenizer = GPT2Tokenizer.from_pretrained('distilgpt2')
             tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-            model = GPT2LMHeadModel.from_pretrained('distilgpt2')
+            model = GPT2LMHeadModel.from_pretrained('FredZhang7/distilgpt2-stable-diffusion-v2')
         except Exception as e:
             logging.error(
-                "Exception encountered while attempting to install tokenizer: %s", e)
+                "Exception encountered while attempting to load model: %s", e)
             abort(500, message="There was an error processing your request")
+            
         try:
             # generate prompt
-            logging.debug("Generate new prompt from: \"%s\"", prompt)
+            logging.info("Generate new prompt from: \"%s\"", prompt)  # Changed to info for production
             input_ids = tokenizer(prompt, return_tensors='pt').input_ids
             output = model.generate(input_ids, do_sample=True, temperature=temperature,
                                     top_k=top_k, max_length=max_length,
@@ -131,12 +140,11 @@ class PromptGenerator(Resource):
             prompt_output = []
             blacklist = self.get_blacklist()
             for count, value in enumerate(output):
-                prompt_output.append(
-                    tokenizer.decode(value, skip_special_tokens=True)
-                )
+                generated = tokenizer.decode(value, skip_special_tokens=True)
                 for term in blacklist:
-                    prompt_output[count] = re.sub(
-                        term, "", prompt_output[count], flags=re.IGNORECASE)
+                    generated = re.sub(
+                        term, "", generated, flags=re.IGNORECASE)
+                prompt_output.append(generated)
 
             # save results to file
             if save_to_file:
@@ -154,4 +162,6 @@ class PromptGenerator(Resource):
 api.add_resource(PromptGenerator, '/generate')
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    # Get port from environment variable (Render sets this)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
